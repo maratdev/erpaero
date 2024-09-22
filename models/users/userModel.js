@@ -14,6 +14,11 @@ export const UserModel = db.define(
 			type: DataTypes.STRING,
 			allowNull: false,
       unique: true,
+      validate: {
+        isEmail: {
+          msg: 'Email is invalid',
+        }
+      }
 		},
 		password: {
 			type: DataTypes.STRING,

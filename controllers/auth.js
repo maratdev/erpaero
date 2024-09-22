@@ -25,9 +25,9 @@ export const createUser = (req, res, next) => {
 		})
 		.catch((err) => {
       console.log(err);
-			if (err.email === 'ValidationError') {
+			if (err.errors[0].validatorKey === 'isEmail') {
 				next(new BadRequestError(invalidDataError));
-			} else if (err.code === 'ER_DUP_ENTRY') {
+			} else if (err.parent?.errno === 1062) {
 				next(new ConflictError(duplicateEmailError));
 			} else {
 				next(err);

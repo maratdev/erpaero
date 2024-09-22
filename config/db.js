@@ -10,6 +10,7 @@ const db = new Sequelize({
   password: process.env.MYSQL_PASSWORD,
   host: process.env.MYSQL_HOST,
   port: process.env.MYSQL_PORT,
+  logging: false,
   define: {
     timestamps: false,
   }
