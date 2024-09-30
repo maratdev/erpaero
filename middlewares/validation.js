@@ -8,3 +8,11 @@ export const validationCreateUser = celebrate({
     password: Joi.string().required(),
   }),
 });
+
+// аутенфикация
+export const validationLogin = celebrate({
+  body: Joi.object().keys({
+    email: Joi.string().required().email(),
+    password: Joi.string().required(),
+  }),
+});
