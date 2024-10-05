@@ -1,18 +1,17 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import process from 'node:process';
 import { StatusCodes } from 'http-status-codes';
 import { UserModel } from '../models/users/userModel.js';
 import { BadRequestError } from '../middlewares/errors/BadRequestError.js';
 import {
-  duplicateEmailError,
-  invalidDataError,
-  userEmailNotFound,
-  wrongCredentialsError,
+	duplicateEmailError,
+	invalidDataError,
+	userEmailNotFound,
+	wrongCredentialsError,
 } from '../middlewares/errors/error-texts.js';
 import { ConflictError } from '../middlewares/errors/ConflictError.js';
+import tokens from '../config/app.js';
 
-const { NODE_ENV, JWT_SECRET, JWT_TOKEN_EXPIRES } = process.env;
 // Создаёт пользователя
 export const createUser = (req, res, next) => {
 	req.body.password = bcrypt.hashSync(req.body.password, 7);
@@ -50,15 +49,17 @@ export const login = async (req, res, next) => {
 		if (!isPasswordValid) {
 			next(new BadRequestError(wrongCredentialsError));
 		}
-		const token = jwt.sign(
-			{ id: user.id.toString(), email: user.email },
-			NODE_ENV === 'production' ? JWT_SECRET : 'prpZUoYKk3YJ3nhemFHZ',
-			{
-				expiresIn: JWT_TOKEN_EXPIRES,
-			},
-		);
-		res.status(StatusCodes.OK).send({ token });
+    const payload = { id: user.id.toString(), email: user.email };
+		const accessToken = jwt.sign(payload, tokens.SECRET, {
+			expiresIn: tokens.ACCESS.expiresIn,
+		});
+
+		const refreshToken = jwt.sign(payload, tokens.SECRET, { expiresIn: tokens.REFRESH.expiresIn });
+    await user.update({ token: refreshToken });
+
+		res.status(StatusCodes.OK).send({ accessToken });
 	} catch (err) {
+		//console.log(err);
 		next(err);
 	}
 };

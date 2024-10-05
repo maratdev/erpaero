@@ -39,4 +39,4 @@ const initApp = async () => {
   }
 };
 
-initApp();
+await initApp();
