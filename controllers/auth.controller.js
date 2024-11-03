@@ -1,11 +1,12 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { StatusCodes } from 'http-status-codes';
+import config from '../config/app.js';
+import tokens from '../config/app.js';
 import UserModel from '../models/users/userModel.js';
 import { BadRequestError } from '../middlewares/errors/BadRequestError.js';
 import { TOKEN, USER } from '../middlewares/errors/error-texts.js';
 import { ConflictError } from '../middlewares/errors/ConflictError.js';
-import tokens from '../config/app.js';
 import { UnauthorizedError } from '../middlewares/errors/UnauthorizedError.js';
 import RefreshTokenModel from '../models/users/RefreshTokenModel.js';
 import { NotFoundError } from '../middlewares/errors/NotFoundError.js';
@@ -23,10 +24,10 @@ import {
 export const createRefreshTokenBd = async (userId, refreshToken, next) => {
 	try {
 		if (userId) {
-			const tokenCheck = await RefreshTokenModel.findOne({
+			const tokenFindDb = await RefreshTokenModel.findOne({
 				where: { user_id: userId, hashedToken: refreshToken },
 			});
-			if (tokenCheck) await tokenCheck.destroy();
+			if (tokenFindDb) await tokenFindDb.destroy();
 
 			const newToken = await RefreshTokenModel.create({
 				user_id: userId,
@@ -49,8 +50,8 @@ export const createUser = async (req, res, next) => {
 		const { email, password } = req.body;
 
 		// проверка есть ли пользователь с таким email
-		const user = await UserModel.findOne({ where: { email } });
-		if (user) return next(new ConflictError(USER.EMAIL_DUPLICATION));
+		const userCheckDb = await UserModel.findOne({ where: { email } });
+		if (userCheckDb) return next(new ConflictError(USER.EMAIL_DUPLICATION));
 
 		await UserModel.create({
 			email: email,
@@ -68,25 +69,25 @@ export const createUser = async (req, res, next) => {
 export const login = async (req, res, next) => {
 	try {
 		const { email, password } = req.body;
-		const userDoc = await UserModel.findOne({ where: { email } });
-		if (!userDoc) {
+		const userDb = await UserModel.findOne({ where: { email } });
+		if (!userDb) {
 			return next(new NotFoundError(USER.EMAIL_NOT_FOUND));
 		}
 
-		const isPasswordValid = await bcrypt.compare(password, userDoc.password);
+		const isPasswordValid = await bcrypt.compare(password, userDb.password);
 		if (!isPasswordValid) {
 			return next(new BadRequestError(USER.INVALID_PASSWORD));
 		}
 
-		const accessToken = await createAccessToken(userDoc?.id);
-		const refreshToken = await createRefreshToken(userDoc?.id);
+		const accessToken = await createAccessToken(userDb?.id);
+		const refreshToken = await createRefreshToken(userDb?.id);
 		res.cookie('jwt', refreshToken, {
-			maxAge: sm(tokens.ACCESS.expiresIn),
-			httpOnly: true,
-			sameSite: 'Strict',
-			secure: true,
+			maxAge: sm(tokens.REFRESH.expiresIn),
+			httpOnly: config.COOKIE_OPTIONS.httpOnly,
+			secure: config.COOKIE_OPTIONS.secure,
+			sameSite: config.COOKIE_OPTIONS.sameSite,
 		});
-		await createRefreshTokenBd(userDoc?.id, refreshToken);
+		await createRefreshTokenBd(userDb?.id, refreshToken);
 		res.status(StatusCodes.OK).send({ accessToken });
 	} catch (err) {
 		//Logger.info(err);
@@ -141,10 +142,10 @@ export const refreshTokenCheck = async (req, res, next) => {
 
 			res
 				.cookie('jwt', newRefreshToken, {
-					maxAge: sm(tokens.ACCESS.expiresIn),
-					httpOnly: true,
-					sameSite: 'none',
-					secure: true,
+					maxAge: sm(tokens.REFRESH.expiresIn),
+					httpOnly: config.COOKIE_OPTIONS.httpOnly,
+					secure: config.COOKIE_OPTIONS.secure,
+					sameSite: config.COOKIE_OPTIONS.sameSite,
 				})
 				.status(StatusCodes.OK)
 				.send({ accessToken });

@@ -29,8 +29,8 @@ export default {
 		credentials: Boolean(CORS_CREDENTIALS),
 	},
 	COOKIE_OPTIONS: {
-		secure: Boolean(COOKIE_SECURE),
 		httpOnly: Boolean(COOKIE_ONLY),
+		secure: Boolean(COOKIE_SECURE),
 		sameSite: COOKIE_SAMESITE,
 	},
 };
