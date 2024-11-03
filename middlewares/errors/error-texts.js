@@ -10,6 +10,7 @@ export const USER = {
   NOT_FOUND: 'User not found',
   SIGN_IN: 'Please sign in',
   LOGOUT: 'Exit user',
+  LOGOUT_ALL: 'Exit all users'
 };
 
 export const TOKEN = {

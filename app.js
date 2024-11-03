@@ -1,20 +1,12 @@
 import express from 'express';
 import cors from "cors";
-import {
-	authenticate,
-	createUser,
-	destroyToken,
-	login,
-	refreshTokenCheck,
-} from './controllers/auth.js';
 import { errors } from 'celebrate';
 import db from './config/db.js';
 import { serverLog } from './middlewares/serverlog.js';
-import { validationCreateUser, validationLogin } from './middlewares/validation.js';
 import { Logger } from './middlewares/logger/index.js';
 import config from './config/app.js';
 import cookieParser from 'cookie-parser';
-
+import userRouter from "./routes/users.js";
 const app = express() || express.Router;
 
 
@@ -33,21 +25,8 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-//testing api
-app.post('/signup', validationCreateUser, createUser);
-app.post('/signin', validationLogin, login);
-app.get('/refresh-token', refreshTokenCheck);
-app.get('/delete-token', authenticate, destroyToken);
-
-app.get('/users/current', authenticate, async (req, res) => {
-	try {
-		return res.status(200).json({
-			msg: 'Successfully retrieved current token',
-		});
-	} catch (error) {
-		return res.status(500).json({ message: error.message });
-	}
-});
+//api
+app.use("/auth", userRouter);
 
 // error handler
 app.use(errors());
