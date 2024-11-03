@@ -37,7 +37,7 @@ export const createRefreshTokenBd = async (userId, refreshToken, next) => {
 		}
 	} catch (err) {
 		//Logger.error(err);
-    next(err);
+		next(err);
 	}
 };
 
@@ -79,7 +79,7 @@ export const login = async (req, res, next) => {
 		}
 
 		const accessToken = await createAccessToken(userDoc?.id);
-    const refreshToken = await createRefreshToken(userDoc?.id);
+		const refreshToken = await createRefreshToken(userDoc?.id);
 		res.cookie('jwt', refreshToken, {
 			maxAge: sm(tokens.ACCESS.expiresIn),
 			httpOnly: true,
@@ -118,7 +118,7 @@ export const authenticate = async (req, res, next) => {
 				.json({ message: TOKEN.INVALID, code: 'AccessTokenInvalid' });
 		} else {
 			//Logger.error(err);
-      return next(err);
+			return next(err);
 		}
 	}
 };
@@ -126,7 +126,7 @@ export const authenticate = async (req, res, next) => {
 export const refreshTokenCheck = async (req, res, next) => {
 	const token = await headerTokenCookie(req, res, next);
 	try {
-    const decoded = await decodeToken(token, tokens.SECRET)
+		const decoded = await decodeToken(token, tokens.SECRET);
 		const userBd = await findBdRefreshToken(token, decoded?.userId, next);
 		if (userBd) await userBd.destroy();
 		const accessToken = await createAccessToken(decoded?.userId);
@@ -139,12 +139,15 @@ export const refreshTokenCheck = async (req, res, next) => {
 			});
 			await refreshToken.save();
 
-      res.cookie('jwt', newRefreshToken, {
-        maxAge: sm(tokens.ACCESS.expiresIn),
-        httpOnly: true,
-        sameSite: 'none',
-        secure: true,
-      }).status(StatusCodes.OK).send({ accessToken });
+			res
+				.cookie('jwt', newRefreshToken, {
+					maxAge: sm(tokens.ACCESS.expiresIn),
+					httpOnly: true,
+					sameSite: 'none',
+					secure: true,
+				})
+				.status(StatusCodes.OK)
+				.send({ accessToken });
 		}
 	} catch (err) {
 		//Logger.info(err);
@@ -156,8 +159,8 @@ export const destroyToken = async (req, res, next) => {
 	try {
 		const token = await headerTokenCookie(req, res, next);
 		if (token) {
-      const decoded = await decodeToken(token, tokens.SECRET, next);
-      const refreshBd = await findBdRefreshToken(token, decoded?.userId, next);
+			const decoded = await decodeToken(token, tokens.SECRET, next);
+			const refreshBd = await findBdRefreshToken(token, decoded?.userId, next);
 			if (refreshBd) {
 				await refreshBd.destroy();
 				res.clearCookie('jwt').status(StatusCodes.OK).send({ message: USER.LOGOUT });
@@ -172,20 +175,18 @@ export const destroyToken = async (req, res, next) => {
 export const destroyAllToken = async (req, res, next) => {
 	try {
 		const token = await headerTokenCookie(req, res, next);
-    console.log(token);
-      const decoded = decodeToken(token, tokens.SECRET, next);
-      const refreshBd = await RefreshTokenModel.destroy({
-        attributes: ['user_id'],
-        where: { user_id: decoded.userId },
-      });
+		console.log(token);
+		const decoded = decodeToken(token, tokens.SECRET, next);
+		const refreshBd = await RefreshTokenModel.destroy({
+			attributes: ['user_id'],
+			where: { user_id: decoded.userId },
+		});
 
-      if (refreshBd) {
-        res.clearCookie('jwt').status(StatusCodes.OK).send({ message: USER.LOGOUT_ALL });
-      } else {
-        return next(new NotFoundError(TOKEN.NOT_FOUND));
-      }
-
-
+		if (refreshBd) {
+			res.clearCookie('jwt').status(StatusCodes.OK).send({ message: USER.LOGOUT_ALL });
+		} else {
+			return next(new NotFoundError(TOKEN.NOT_FOUND));
+		}
 	} catch (err) {
 		//Logger.info(err);
 		return next(err);

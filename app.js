@@ -1,37 +1,26 @@
 import express from 'express';
-import cors from "cors";
+import cors from 'cors';
 import { errors } from 'celebrate';
 import db from './config/db.js';
 import { serverLog } from './middlewares/serverlog.js';
 import { Logger } from './middlewares/logger/index.js';
 import config from './config/app.js';
 import cookieParser from 'cookie-parser';
-import userRouter from "./routes/users.js";
+import userRouter from './routes/users.js';
+
 const app = express() || express.Router;
 
-
-app.use(
-  cors({
-    credentials: true,
-  })
-);
-app.use(
-	cookieParser({
-    secure: true,
-		httpOnly: true,
-		sameSite: 'strict',
-	}),
-);
+app.use(cors(config.CORS_OPTIONS));
+app.use(cookieParser(config.COOKIE_OPTIONS));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 //api
-app.use("/auth", userRouter);
+app.use('/auth', userRouter);
 
 // error handler
 app.use(errors());
 app.use(serverLog);
-
 // ----------------------------------- Настройки сервера и БД --------------------------------/
 const initApp = async () => {
 	try {

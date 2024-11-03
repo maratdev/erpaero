@@ -25,53 +25,53 @@ export const sm = (str) => {
 };
 
 export const headerTokenCookie = async (req) => {
-    const token = req.cookies['jwt'];
-    if (!token) {
-      throw new NotFoundError(TOKEN.NOT_FOUND)
-    }
-    return token;
+  const token = req.cookies['jwt'];
+	if (!token) {
+		throw new NotFoundError(TOKEN.NOT_FOUND);
+	}
+	return token;
 };
 
 export const headerTokenLocal = async (req) => {
 	const refreshToken = req.headers['authorization'];
 
 	if (!refreshToken?.startsWith('Bearer ')) {
-    throw new BadRequestError(TOKEN.INVALID_RT);
+		throw new BadRequestError(TOKEN.INVALID_RT);
 	}
 	return refreshToken.replace('Bearer ', '');
 };
 
-export const decodeToken = async (token, key, next) => {
+export const decodeToken = async (token, key) => {
 	return jwt.verify(token, key, async (err, decoded) => {
 		if (err) {
-      throw new BadRequestError(TOKEN.INVALID_RT);
+			throw new BadRequestError(TOKEN.INVALID_RT);
 		}
 		return decoded;
 	});
 };
 
 export const findBdRefreshToken = async (refreshToken, userId) => {
-		if (userId) {
-			const userToken = await RefreshTokenModel.findOne({
-				where: { user_id: userId, hashedToken: refreshToken },
-			});
-			if (!userToken) {
-        throw new BadRequestError(TOKEN.INVALID_BD);
-			} else {
-				return userToken;
-			}
+  if (userId) {
+		const userToken = await RefreshTokenModel.findOne({
+			where: { user_id: userId, hashedToken: refreshToken },
+		});
+		if (!userToken) {
+			throw new BadRequestError(TOKEN.INVALID_BD);
+		} else {
+			return userToken;
 		}
+	}
 };
 
 export const createAccessToken = async (userId) => {
-		return jwt.sign({ userId: userId }, tokens.SECRET, {
-			subject: tokens.ACCESS.type,
-			expiresIn: tokens.ACCESS.expiresIn,
-		});
+	return jwt.sign({ userId: userId }, tokens.SECRET, {
+		subject: tokens.ACCESS.type,
+		expiresIn: tokens.ACCESS.expiresIn,
+	});
 };
 export const createRefreshToken = async (userId) => {
-		return jwt.sign({ userId: userId }, tokens.SECRET, {
-			expiresIn: tokens.REFRESH.expiresIn,
-			subject: tokens.REFRESH.type,
-		});
+	return jwt.sign({ userId: userId }, tokens.SECRET, {
+		expiresIn: tokens.REFRESH.expiresIn,
+		subject: tokens.REFRESH.type,
+	});
 };
