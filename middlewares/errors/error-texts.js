@@ -1,21 +1,25 @@
-const invalidDataError = 'Введены невалидные данные';
-const forbiddenError = 'Нет прав';
-const userEmailNotFound = 'Нет пользователя с таким email';
-const duplicateEmailError = 'Пользователь с таким email уже существует';
-const wrongCredentialsError = 'Неправильная почта или пароль';
-const unauthorizedError = 'Необходима авторизация';
-const serverError = 'На сервере произошла ошибка';
-const wrongLinkFormat = 'Неправильный формат ссылки';
-const pageNotFound = 'Такая страница не существует';
+export const USER = {
+  UNAUTHORIZED: 'Unauthorized',
+  FORBIDDEN_ERROR: 'No access',
+  EMAIL_NOT_FOUND: 'Email not found',
+  EMAIL_DUPLICATION: 'Email already exists',
+  EMAIL_CONFIRM: 'Your email address has been confirmed',
+  CREATED_SUCCESS: 'User successfully created',
+  LOGIN_EXIST: 'Email or password is incorrect',
+  INVALID_PASSWORD: 'Invalid password',
+  NOT_FOUND: 'User not found',
+  SIGN_IN: 'Please sign in',
+  LOGOUT: 'Exit user',
+};
 
-export {
-	invalidDataError,
-	forbiddenError,
-	userEmailNotFound,
-	duplicateEmailError,
-	wrongCredentialsError,
-	unauthorizedError,
-	serverError,
-	wrongLinkFormat,
-	pageNotFound,
+export const TOKEN = {
+  INVALID: 'Invalid token',
+  INVALID_RT: 'Invalid refresh token',
+  INVALID_BD: 'Refresh token is incorrect',
+  INVALID_TIME: 'Access token expired',
+  NOT_FOUND: 'Access token not found',
+};
+
+export const SERVER = {
+  ERROR: 'An error occurred on the server',
 };

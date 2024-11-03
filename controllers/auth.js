@@ -1,65 +1,227 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { StatusCodes } from 'http-status-codes';
-import { UserModel } from '../models/users/userModel.js';
+import UserModel from '../models/users/userModel.js';
 import { BadRequestError } from '../middlewares/errors/BadRequestError.js';
-import {
-	duplicateEmailError,
-	invalidDataError,
-	userEmailNotFound,
-	wrongCredentialsError,
-} from '../middlewares/errors/error-texts.js';
+import { TOKEN, USER } from '../middlewares/errors/error-texts.js';
 import { ConflictError } from '../middlewares/errors/ConflictError.js';
 import tokens from '../config/app.js';
+import { UnauthorizedError } from '../middlewares/errors/UnauthorizedError.js';
+import RefreshTokenModel from '../models/users/RefreshTokenModel.js';
+import { NotFoundError } from '../middlewares/errors/NotFoundError.js';
+import { Logger } from '../middlewares/logger/index.js';
+import { sm } from '../util/helper.js';
 
-// Создаёт пользователя
-export const createUser = (req, res, next) => {
-	req.body.password = bcrypt.hashSync(req.body.password, 7);
-	const { email, password } = req.body;
-	UserModel.create({
-		email: email,
-		password: password,
-	})
-		.then((result) => {
-			res.status(StatusCodes.CREATED).send({
-				email: result.email,
-				password: result.password,
-			});
-		})
-		.catch((err) => {
-			if (err.errors[0].validatorKey === 'isEmail') {
-				next(new BadRequestError(invalidDataError));
-			} else if (err.parent?.errno === 1062) {
-				next(new ConflictError(duplicateEmailError));
-			} else {
-				next(err);
-			}
+export const createAccessToken = async (userId) => {
+	try {
+		return jwt.sign({ userId: userId }, tokens.SECRET, {
+			subject: tokens.ACCESS.type,
+			expiresIn: tokens.ACCESS.expiresIn,
 		});
+	} catch (error) {
+		Logger.error(error);
+	}
+};
+export const createRefreshToken = async (userId) => {
+	try {
+		return jwt.sign({ userId: userId }, tokens.SECRET, {
+			expiresIn: tokens.REFRESH.expiresIn,
+			subject: tokens.REFRESH.type,
+		});
+	} catch (error) {
+		Logger.error(error);
+	}
+};
+
+export const createRefreshTokenBd = async (userId, refreshToken) => {
+	try {
+		if (userId) {
+			const tokenCheck = await RefreshTokenModel.findOne({
+				where: { user_id: userId, hashedToken: refreshToken },
+			});
+			if (tokenCheck) await tokenCheck.destroy();
+
+			const newToken = await RefreshTokenModel.create({
+				user_id: userId,
+				hashedToken: refreshToken,
+			});
+
+			return newToken.hashedToken;
+		}
+	} catch (error) {
+		Logger.error(error);
+	}
+};
+
+export const findBdRefreshToken = async (refreshToken, userId, next) => {
+	try {
+		if (userId) {
+			const userToken = await RefreshTokenModel.findOne({
+				where: { user_id: userId, hashedToken: refreshToken },
+			});
+			if (!userToken) {
+				return next(new BadRequestError(TOKEN.INVALID_BD));
+			} else {
+				return userToken;
+			}
+		}
+	} catch (err) {
+		Logger.error(err);
+		next(err);
+	}
+};
+
+//----------------------------------------------------------------//
+// Создаёт пользователя
+export const createUser = async (req, res, next) => {
+	try {
+		req.body.password = bcrypt.hashSync(req.body.password, 7);
+		const { email, password } = req.body;
+
+		// проверка есть ли пользователь с таким email
+		const user = await UserModel.findOne({ where: { email } });
+		if (user) return next(new ConflictError(USER.EMAIL_DUPLICATION));
+
+		await UserModel.create({
+			email: email,
+			password: password,
+		});
+
+		res.status(StatusCodes.CREATED).send();
+	} catch (err) {
+		Logger.info(err);
+		next(err);
+	}
 };
 
 // Авторизация
 export const login = async (req, res, next) => {
 	try {
 		const { email, password } = req.body;
-		const user = await UserModel.findOne({ where: { email } });
-		if (!user) {
-			next(new BadRequestError(userEmailNotFound));
+		const userDoc = await UserModel.findOne({ where: { email } });
+		if (!userDoc) {
+			return next(new NotFoundError(USER.EMAIL_NOT_FOUND));
 		}
-		const isPasswordValid = await bcrypt.compare(password, user.password);
+
+		const isPasswordValid = await bcrypt.compare(password, userDoc.password);
 		if (!isPasswordValid) {
-			next(new BadRequestError(wrongCredentialsError));
+			return next(new BadRequestError(USER.INVALID_PASSWORD));
 		}
-    const payload = { id: user.id.toString(), email: user.email };
-		const accessToken = jwt.sign(payload, tokens.SECRET, {
-			expiresIn: tokens.ACCESS.expiresIn,
+
+		const accessToken = await createAccessToken(userDoc?.id);
+    const refreshToken = await createRefreshToken(userDoc?.id);
+    res.cookie('jwt', refreshToken, {
+			maxAge: sm(tokens.ACCESS.expiresIn),
+			httpOnly: true,
+			sameSite: 'Strict',
+			secure: true,
 		});
-
-		const refreshToken = jwt.sign(payload, tokens.SECRET, { expiresIn: tokens.REFRESH.expiresIn });
-    await user.update({ token: refreshToken });
-
+		await createRefreshTokenBd(userDoc?.id, refreshToken);
 		res.status(StatusCodes.OK).send({ accessToken });
 	} catch (err) {
-		//console.log(err);
-		next(err);
+		Logger.info(err);
+		return next(err);
+	}
+};
+
+
+
+export const authenticate = (req, res, next) => {
+  try {
+    const accessTokenJwt = req?.headers['authorization'];
+    if (!accessTokenJwt?.startsWith('Bearer ')) {
+      return next(new BadRequestError(TOKEN.INVALID));
+    }
+    const token = accessTokenJwt.replace('Bearer ', '');
+    let payload;
+    try {
+      payload = jwt.verify(token, tokens.SECRET);
+    } catch {
+      return next(new UnauthorizedError(USER.UNAUTHORIZED));
+    }
+    req.accessToken = { value: token, exp: payload.exp };
+    req.user = payload;
+    next();
+  } catch (err) {
+    if (err instanceof jwt.TokenExpiredError) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({ message: TOKEN.INVALID_TIME, code: 'AccessTokenExpired' });
+    } else if (err instanceof jwt.JsonWebTokenError) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({ message: TOKEN.INVALID, code: 'AccessTokenInvalid' });
+    } else {
+      Logger.error(err);
+    }
+  }
+};
+
+export const refreshTokenCheck = async (req, res, next) => {
+
+  const token = req?.cookies['jwt'];
+  if (!token) {
+    return next(new BadRequestError(TOKEN.INVALID));
+  }
+  try {
+    const decoded = await jwt.verify(token, tokens.SECRET, async (err, decoded) => {
+      if (err) {
+        return next(new BadRequestError(TOKEN.INVALID_RT));
+      }
+      return decoded;
+    });
+    const userBd = await findBdRefreshToken(token, decoded?.userId, next);
+    if (userBd) await userBd.destroy();
+    const accessToken = await createAccessToken(decoded?.userId);
+    const newRefreshToken = await createRefreshToken(decoded?.userId);
+    res.cookie('jwt', newRefreshToken, {
+      maxAge: sm(tokens.ACCESS.expiresIn),
+      httpOnly: true,
+      sameSite: 'none',
+      secure: true,
+    });
+
+    if (userBd) {
+      const refreshToken = await RefreshTokenModel.create({
+        user_id: decoded.userId,
+        hashedToken: newRefreshToken,
+      });
+      await refreshToken.save();
+      if (newRefreshToken) {
+        return res
+          .status(StatusCodes.OK)
+          .send({  accessToken });
+      }
+    }
+  } catch (err) {
+    Logger.info(err);
+    return next(err);
+  }
+};
+
+export const destroyToken = async (req, res, next) => {
+	try {
+		const refreshToken = req.headers['authorization'];
+		if (!refreshToken?.startsWith('Bearer ')) {
+			return next(new BadRequestError(TOKEN.INVALID_RT));
+		}
+		const token = refreshToken.replace('Bearer ', '');
+
+		const decoded = await jwt.verify(token, tokens.SECRET, async (err, decoded) => {
+			if (err) {
+				next(new BadRequestError(TOKEN.INVALID_RT));
+			}
+			return decoded;
+		});
+
+		const refreshBd = await RefreshTokenModel.findOne({
+			where: { user_id: decoded.userId, hashedToken: token },
+		});
+
+		if (!refreshBd) return next(new NotFoundError(TOKEN.NOT_FOUND));
+
+		res.clearCookie('jwt');
+		await refreshBd.destroy();
+
+		res.status(StatusCodes.OK).send({ message: USER.LOGOUT });
+	} catch (err) {
+		Logger.info(err);
+		return next(err);
 	}
 };

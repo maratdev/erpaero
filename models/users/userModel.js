@@ -1,32 +1,42 @@
-import { DataTypes } from 'sequelize';
+import { DataTypes, Model } from 'sequelize';
 import db from '../../config/db.js';
+import RefreshTokenModel from './RefreshTokenModel.js';
 
-export const UserModel = db.define(
-	'user',
+class UserModel extends Model {}
+
+const model = UserModel.init(
 	{
 		id: {
 			type: DataTypes.UUID,
 			defaultValue: DataTypes.UUIDV4,
 			primaryKey: true,
-      unique: true,
+			unique: true,
 		},
 		email: {
 			type: DataTypes.STRING,
 			allowNull: false,
-      unique: true,
-      validate: {
-        isEmail: {
-          msg: 'Email is invalid',
-        }
-      }
+			unique: true,
+			validate: {
+				isEmail: {
+					msg: 'Email is invalid',
+				},
+			},
 		},
 		password: {
 			type: DataTypes.STRING,
 			allowNull: false,
 		},
-    token: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
-	}
+	},
+	{
+		sequelize: db,
+		timestamps: true,
+		tableName: 'users',
+	},
 );
+
+model.hasMany(RefreshTokenModel, {
+	as: 'RefreshTokens',
+	foreignKey: 'user_id',
+});
+
+export default model;
