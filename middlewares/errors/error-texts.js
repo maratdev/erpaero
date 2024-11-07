@@ -1,4 +1,5 @@
 export const USER = {
+  CREATED: 'User created',
   UNAUTHORIZED: 'Unauthorized',
   FORBIDDEN_ERROR: 'No access',
   EMAIL_NOT_FOUND: 'Email not found',
@@ -19,6 +20,14 @@ export const TOKEN = {
   INVALID_BD: 'Refresh token is incorrect',
   INVALID_TIME: 'Access token expired',
   NOT_FOUND: 'Access token not found',
+};
+
+export const TOTP = {
+  SUCCESS: 'TOTP validated successfully',
+  INVALID: 'TOTP is not correct or expired',
+  REQUIRED: 'TOTP is required',
+  CONFIRM: 'Please fill in all fields (tempToken and totp)',
+  EXIST: 'The provided temporary token is incorrect or expired',
 };
 
 export const SERVER = {

@@ -26,6 +26,15 @@ const model = UserModel.init(
 			type: DataTypes.STRING,
 			allowNull: false,
 		},
+
+    two_factor_enabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    two_factor_secret: {
+      type: DataTypes.STRING,
+    },
 	},
 	{
 		sequelize: db,

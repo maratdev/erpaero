@@ -1,15 +1,19 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { StatusCodes } from 'http-status-codes';
-import config from '../config/app.js';
+import { authenticator } from 'otplib';
+import qrcode from 'qrcode';
+import crypto from 'crypto';
+import NodeCache from 'node-cache';
 import tokens from '../config/app.js';
 import UserModel from '../models/users/userModel.js';
 import { BadRequestError } from '../middlewares/errors/BadRequestError.js';
-import { TOKEN, USER } from '../middlewares/errors/error-texts.js';
+import { TOKEN, TOTP, USER } from '../middlewares/errors/error-texts.js';
 import { ConflictError } from '../middlewares/errors/ConflictError.js';
 import { UnauthorizedError } from '../middlewares/errors/UnauthorizedError.js';
 import RefreshTokenModel from '../models/users/RefreshTokenModel.js';
 import { NotFoundError } from '../middlewares/errors/NotFoundError.js';
+
 import { Logger } from '../middlewares/logger/index.js';
 import {
 	createAccessToken,
@@ -20,6 +24,8 @@ import {
 	headerTokenLocal,
 	sm,
 } from '../util/helper.js';
+
+const cache = new NodeCache();
 
 export const createRefreshTokenBd = async (userId, refreshToken, next) => {
 	try {
@@ -58,7 +64,7 @@ export const createUser = async (req, res, next) => {
 			password: password,
 		});
 
-		res.status(StatusCodes.CREATED).send();
+		res.status(StatusCodes.CREATED).send({ message: USER.CREATED});
 	} catch (err) {
 		Logger.info(err);
 		next(err);
@@ -79,16 +85,24 @@ export const login = async (req, res, next) => {
 			return next(new BadRequestError(USER.INVALID_PASSWORD));
 		}
 
-		const accessToken = await createAccessToken(userDb?.id);
-		const refreshToken = await createRefreshToken(userDb?.id);
-		res.cookie('jwt', refreshToken, {
-			maxAge: sm(tokens.REFRESH.expiresIn),
-			httpOnly: config.COOKIE_OPTIONS.httpOnly,
-			secure: config.COOKIE_OPTIONS.secure,
-			sameSite: config.COOKIE_OPTIONS.sameSite,
-		});
-		await createRefreshTokenBd(userDb?.id, refreshToken);
-		res.status(StatusCodes.OK).send({ accessToken });
+    if (userDb.two_factor_enabled === true) {
+			const tempToken = crypto.randomUUID();
+			cache.set(tokens.TEMP_TOKEN.cache + tempToken, userDb.id, tokens.TEMP_TOKEN.expiresIn); //180s -> 3m
+			return res
+				.status(StatusCodes.OK)
+				.send({ tempToken, expiresInSecond: tokens.TEMP_TOKEN.expiresIn });
+		} else {
+			const accessToken = await createAccessToken(userDb?.id);
+			const refreshToken = await createRefreshToken(userDb?.id);
+			res.cookie('jwt', refreshToken, {
+				maxAge: sm(tokens.REFRESH.expiresIn),
+				httpOnly: tokens.COOKIE_OPTIONS.httpOnly,
+				secure: tokens.COOKIE_OPTIONS.secure,
+				sameSite: tokens.COOKIE_OPTIONS.sameSite,
+			});
+			await createRefreshTokenBd(userDb?.id, refreshToken);
+			res.status(StatusCodes.OK).send({ accessToken });
+		}
 	} catch (err) {
 		//Logger.info(err);
 		return next(err);
@@ -143,9 +157,9 @@ export const refreshTokenCheck = async (req, res, next) => {
 			res
 				.cookie('jwt', newRefreshToken, {
 					maxAge: sm(tokens.REFRESH.expiresIn),
-					httpOnly: config.COOKIE_OPTIONS.httpOnly,
-					secure: config.COOKIE_OPTIONS.secure,
-					sameSite: config.COOKIE_OPTIONS.sameSite,
+					httpOnly: tokens.COOKIE_OPTIONS.httpOnly,
+					secure: tokens.COOKIE_OPTIONS.secure,
+					sameSite: tokens.COOKIE_OPTIONS.sameSite,
 				})
 				.status(StatusCodes.OK)
 				.send({ accessToken });
@@ -176,7 +190,6 @@ export const destroyToken = async (req, res, next) => {
 export const destroyAllToken = async (req, res, next) => {
 	try {
 		const token = await headerTokenCookie(req, res, next);
-		console.log(token);
 		const decoded = decodeToken(token, tokens.SECRET, next);
 		const refreshBd = await RefreshTokenModel.destroy({
 			attributes: ['user_id'],
@@ -192,4 +205,80 @@ export const destroyAllToken = async (req, res, next) => {
 		//Logger.info(err);
 		return next(err);
 	}
+};
+
+export const twoFactorAuth = async (req, res, next) => {
+	try {
+		const { userId } = req.user;
+		const user = await UserModel.findOne({ where: { id: userId } });
+		if (!user) {
+			return next(new NotFoundError(USER.NOT_FOUND));
+		}
+		const secret = authenticator.generateSecret();
+		const uri = authenticator.keyuri(user.email, 'Erpaero', secret);
+
+		await user.update({ two_factor_secret: secret });
+		const qrCode = await qrcode.toBuffer(uri, { type: 'image/png', margin: 1 });
+		res.setHeader('Content-Disposition', 'attachment; filename=qrcode.png');
+		return res.status(StatusCodes.OK).type('image/png').send(qrCode);
+	} catch (err) {
+		//Logger.info(err);
+		return next(err);
+	}
+};
+
+export const twoFactorValidate = async (req, res, next) => {
+	try {
+		const { totp } = req.body;
+		const { userId } = req.user;
+		if (!totp) {
+			return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: TOTP.REQUIRED });
+		}
+		const user = await UserModel.findOne({ where: { id: userId } });
+		if (!user) {
+			return next(new NotFoundError(USER.NOT_FOUND));
+		}
+		const verified = authenticator.check(totp, user.two_factor_secret);
+		if (!verified) {
+			return res.status(StatusCodes.BAD_REQUEST).json({ message: TOTP.INVALID });
+		}
+		await user.update({ two_factor_enabled: true });
+
+		return res.status(StatusCodes.OK).json({ message: TOTP.SUCCESS });
+	} catch (err) {
+		//Logger.info(err);
+		return next(err);
+	}
+};
+
+export const twoFactorLogin = async (req, res, next) => {
+  try {
+    const { tempToken, totp } = req.body
+    if (!tempToken || !totp) {
+      return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({ message: TOTP.CONFIRM })
+    }
+    const userId = cache.get(tokens.TEMP_TOKEN.cache + tempToken)
+    if (!userId) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({ message: TOTP.EXIST })
+    }
+    const user = await UserModel.findOne({ where: { id: userId } });
+
+    const verified = authenticator.check(totp, user.two_factor_secret)
+    if (!verified) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({ message: TOTP.INVALID });
+    }
+    const accessToken = await createAccessToken(user?.id);
+    const refreshToken = await createRefreshToken(user?.id);
+    res.cookie('jwt', refreshToken, {
+      maxAge: sm(tokens.REFRESH.expiresIn),
+      httpOnly: tokens.COOKIE_OPTIONS.httpOnly,
+      secure: tokens.COOKIE_OPTIONS.secure,
+      sameSite: tokens.COOKIE_OPTIONS.sameSite,
+    });
+    await createRefreshTokenBd(user?.id, refreshToken);
+    res.status(StatusCodes.OK).send({ accessToken });
+  } catch (err) {
+    //Logger.info(err);
+    return next(err);
+  }
 };

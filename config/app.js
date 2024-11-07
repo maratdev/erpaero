@@ -12,6 +12,8 @@ const {
 	COOKIE_ONLY,
 	COOKIE_SAMESITE,
 	CORS_CREDENTIALS,
+  CACHE_TEMP_TOKEN,
+  CACHE_TEMP_EXPIRES
 } = process.env;
 export default {
 	SECRET: NODE_ENV === 'production' ? JWT_SECRET : 'prpZUoYKk3YJ3nhemFHZ',
@@ -33,4 +35,8 @@ export default {
 		secure: Boolean(COOKIE_SECURE),
 		sameSite: COOKIE_SAMESITE,
 	},
+	TEMP_TOKEN: {
+    cache: CACHE_TEMP_TOKEN,
+    expiresIn: Number(CACHE_TEMP_EXPIRES),
+  },
 };
