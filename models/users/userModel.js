@@ -1,6 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import db from '../../config/db.js';
 import RefreshTokenModel from './RefreshTokenModel.js';
+import FilesUserModel from './filesModel.js';
 
 class UserModel extends Model {}
 
@@ -46,6 +47,10 @@ const model = UserModel.init(
 model.hasMany(RefreshTokenModel, {
 	as: 'RefreshTokens',
 	foreignKey: 'user_id',
+});
+model.hasMany(FilesUserModel, {
+  as: 'FilesUserModel',
+  foreignKey: 'user_id',
 });
 
 export default model;

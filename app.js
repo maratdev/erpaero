@@ -7,16 +7,32 @@ import { Logger } from './middlewares/logger/index.js';
 import config from './config/app.js';
 import cookieParser from 'cookie-parser';
 import userRouter from './routes/users.js';
+import fileRouter from './routes/file-upload.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const app = express() || express.Router;
-
 app.use(cors(config.CORS_OPTIONS));
 app.use(cookieParser(config.COOKIE_OPTIONS));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
 //api
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, '/ejs'));
+app.use('/uploads', express.static('uploads'));
+
+app.get('/', (req, res) => {
+	try {
+		res.render('index');
+	} catch (error) {
+		Logger.error(error);
+	}
+});
+
 app.use('/auth', userRouter);
+app.use('/file', fileRouter);
 
 // error handler
 app.use(errors());
@@ -24,7 +40,7 @@ app.use(serverLog);
 // ----------------------------------- Настройки сервера и БД --------------------------------/
 const initApp = async () => {
 	try {
-		await db.sync();
+		await db.sync({ force: true});
 		await db.authenticate();
 		Logger.info('Connection DB has been established successfully.');
 		app.listen(config.PORT, () => {
