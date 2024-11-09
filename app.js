@@ -1,32 +1,40 @@
-import createError from 'http-errors';
-import { config } from 'dotenv';
 import express from 'express';
+import cors from 'cors';
+import { errors } from 'celebrate';
+import db from './config/db.js';
+import { serverLog } from './middlewares/serverlog.js';
+import { Logger } from './middlewares/logger/index.js';
+import config from './config/app.js';
 import cookieParser from 'cookie-parser';
-import process from 'node:process';
-import { Logger } from './util/logger.js';
+import userRouter from './routes/users.js';
+import fileRouter from './routes/file-upload.js';
 
-config();
 const app = express() || express.Router;
-
-
+app.use(cors(config.CORS_OPTIONS));
+app.use(cookieParser(config.COOKIE_OPTIONS));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
+app.use('/uploads', express.static('uploads'));
 
-//testing api
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Welcome to the server!',
-  })
-})
-// catch 404 and forward to error handler
-app.use(function (req, res, next) {
-	next(createError(404));
-});
+//api
+app.use('/auth', userRouter);
+app.use('/file', fileRouter);
 
 // error handler
+app.use(errors());
+app.use(serverLog);
 // ----------------------------------- Настройки сервера и БД --------------------------------/
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  Logger.log('info', `App listening on port ${process.env.PORT}!`);
-});
+const initApp = async () => {
+	try {
+    await db.sync();
+		await db.authenticate();
+		Logger.info('Connection DB has been established successfully.');
+		app.listen(config.PORT, () => {
+			Logger.info(`App listening on port ${config.PORT}!`);
+		});
+	} catch (error) {
+		Logger.info(`Unable to connect to the database: ${error.original}`);
+	}
+};
+
+await initApp();
