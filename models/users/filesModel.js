@@ -5,13 +5,19 @@ class FilesUserModel extends Model {}
 
 const model = FilesUserModel.init(
   {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+      unique: true,
+    },
     user_id: {
       type: DataTypes.UUID,
     },
     filename: {
       type: DataTypes.STRING,
     },
-    src: {
+    destination: {
       type: DataTypes.STRING,
     },
     type: {

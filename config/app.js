@@ -13,7 +13,8 @@ const {
 	COOKIE_SAMESITE,
 	CORS_CREDENTIALS,
   CACHE_TEMP_TOKEN,
-  CACHE_TEMP_EXPIRES
+  CACHE_TEMP_EXPIRES,
+  PATH_FILES
 } = process.env;
 export default {
 	SECRET: NODE_ENV === 'production' ? JWT_SECRET : 'prpZUoYKk3YJ3nhemFHZ',
@@ -26,6 +27,8 @@ export default {
 		expiresIn: JWT_TOKEN_EXPIRES,
 	},
 	PORT: PORT || 3005,
+
+  PATH: PATH_FILES,
 
 	CORS_OPTIONS: {
 		credentials: Boolean(CORS_CREDENTIALS),

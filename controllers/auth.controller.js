@@ -52,7 +52,7 @@ export const createRefreshTokenBd = async (userId, refreshToken, next) => {
 // Создаёт пользователя
 export const createUser = async (req, res, next) => {
 	try {
-		req.body.password = bcrypt.hashSync(req.body.password, 7);
+    req.body.password = bcrypt.hashSync(req.body.password, 7);
 		const { email, password } = req.body;
 
 		// проверка есть ли пользователь с таким email

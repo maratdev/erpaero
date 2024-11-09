@@ -14,6 +14,12 @@ export const USER = {
   LOGOUT_ALL: 'Exit all users'
 };
 
+export const FILE = {
+  NOT_FOUND: 'File not found DB',
+  NOT_FOUND_DISK: 'Disk not found',
+  SUCCESS_UPDATE: 'File updated successfully'
+};
+
 export const TOKEN = {
   INVALID: 'Invalid token',
   INVALID_RT: 'Invalid refresh token',
